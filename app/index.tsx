@@ -6,9 +6,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Device } from "react-native-ble-plx";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import DeviceModal from "../DeviceConnectionModal";
-import useBLE from "../useBLE";
+import DeviceModal from "./DeviceConnectionModal";
+import useBLE from "./hooks/useBLE";
+import { sendSyncPacket } from "./utilis/sendSyncPacket";
 
 export default function Index() {
   const {
@@ -16,11 +18,15 @@ export default function Index() {
     scanForPeripherals,
     allDevices,
     connectToDevice,
-    connectedDevice,
+    connectedDevices,
     disconnectFromDevice,
   } = useBLE();
 
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
+  const [rightDevice, setRightDevice] = useState<Device | undefined>(undefined);
+  const [leftDevice, setLeftDevice] = useState<Device | undefined>(undefined);
+
+  // Update devices when connected devices change
 
   const scanForDevices = async () => {
     const permissionsGranted = await requestPermissions();
@@ -40,6 +46,10 @@ export default function Index() {
     setIsModalVisible(true);
   };
 
+  const sendStart = async () => {
+    sendSyncPacket(connectedDevices[0]);
+  };
+
   return (
     <SafeAreaProvider style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -49,20 +59,22 @@ export default function Index() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Status:</Text>
           <Text style={styles.value}>
-            {connectedDevice ? "Connected" : "Not Connected"}
+            {connectedDevices.length > 0
+              ? `Connected (${connectedDevices.length})`
+              : "Not Connected"}
           </Text>
         </View>
 
         {/* Device Info */}
-        {connectedDevice && (
+        {connectedDevices && connectedDevices.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Device Name:</Text>
-            <Text style={styles.value}>
-              {connectedDevice.name || "Unknown"}
-            </Text>
-
-            <Text style={styles.sectionTitle}>Device ID:</Text>
-            <Text style={styles.valueSmall}>{connectedDevice.id}</Text>
+            <Text style={styles.sectionTitle}>Connected Devices:</Text>
+            {connectedDevices.map((item) => (
+              <View key={item.id} style={styles.deviceItem}>
+                <Text style={styles.deviceName}>{item.name || "Unknown"}</Text>
+                <Text style={styles.deviceId}>{item.id}</Text>
+              </View>
+            ))}
           </View>
         )}
 
@@ -82,13 +94,20 @@ export default function Index() {
         </View>
       </ScrollView>
 
+      {/* button for sync packets */}
+      <TouchableOpacity onPress={sendStart} style={styles.ctaButton}>
+        <Text style={styles.ctaButtonText}>start</Text>
+      </TouchableOpacity>
+
       {/* Connect/Disconnect Button */}
       <TouchableOpacity
-        onPress={connectedDevice ? disconnectFromDevice : openModal}
+        onPress={
+          connectedDevices.length > 0 ? () => disconnectFromDevice() : openModal
+        }
         style={styles.ctaButton}
       >
         <Text style={styles.ctaButtonText}>
-          {connectedDevice ? "Disconnect" : "Scan & Connect"}
+          {connectedDevices.length > 0 ? "Disconnect All" : "Scan & Connect"}
         </Text>
       </TouchableOpacity>
 
@@ -173,5 +192,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     color: "white",
+  },
+  deviceItem: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  deviceName: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+  },
+  deviceId: {
+    fontSize: 12,
+    color: "#999",
+    marginTop: 4,
+    fontFamily: "monospace",
   },
 });
